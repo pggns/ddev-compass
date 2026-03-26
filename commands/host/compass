@@ -1,9 +1,9 @@
-#ddev-generated
 #!/usr/bin/env bash
 
-## Description: Öffnet MongoDB Compass unter Windows aus WSL2 heraus
+## #ddev-generated: If you want to edit and own this file, remove this line.
+## Description: Launch MongoDB Compass
 ## Usage: compass
-## Example: ddev compass
+## Example: "ddev compass"
 
 if [ "${DDEV_PROJECT_STATUS}" != "running" ] && [ -z "$no_recursion" ]; then
   echo "Project ${DDEV_PROJECT} is not running, starting it"
