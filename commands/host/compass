@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+## Description: Öffnet MongoDB Compass unter Windows aus WSL2 heraus
+## Usage: compass
+## Example: ddev compass
+
+if [ "${DDEV_PROJECT_STATUS}" != "running" ] && [ -z "$no_recursion" ]; then
+  echo "Project ${DDEV_PROJECT} is not running, starting it"
+  ddev start || exit $?
+  no_recursion=true ddev "$(basename "$0")" "$@"
+  exit $?
+fi
+
+binary="$(wslpath "$(powershell.exe -Command "echo \$env:LOCALAPPDATA" | tr -d '\r')")/MongoDBCompass/MongoDBCompass.exe"
+
+mongoport=$(ddev describe -j | jq -r '.raw.services.mongo.host_ports_mapping[0].host_port')
+
+if [ -z "$mongoport" ]; then
+    echo "Fehler: Der Host-Port für den Service 'mongo' konnte nicht ermittelt werden."
+    exit 1
+fi
+
+"${binary}" ""mongodb://localhost:${mongoport}?authSource=admin&readPreference=primary&ssl=false"" &>/dev/null & disown

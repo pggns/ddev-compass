@@ -1,0 +1,9 @@
+name: compass
+
+project_files:
+  - commands/host/compass
+
+# post_install_tasks:
+#   - exec-host: yq -i '.services.mongo.ports = ["0:27017"]' .ddev/docker-compose.mongo.yaml
+
+ddev_version_constraint: '>= v1.24.10'
