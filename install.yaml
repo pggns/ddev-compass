@@ -2,6 +2,7 @@ name: compass
 
 project_files:
   - commands/host/compass
+  - docker-compose.compass.yaml
 
 # post_install_tasks:
 #   - exec-host: yq -i '.services.mongo.ports = ["0:27017"]' .ddev/docker-compose.mongo.yaml
