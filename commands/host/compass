@@ -1,3 +1,4 @@
+#ddev-generated
 #!/usr/bin/env bash
 
 ## Description: Öffnet MongoDB Compass unter Windows aus WSL2 heraus
