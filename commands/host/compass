@@ -4,7 +4,6 @@
 ## Description: Open MongoDB Compass connected to this project's MongoDB service
 ## Usage: compass
 ## Example: "ddev compass"
-## HostBinaryExists: "/Applications/MongoDB Compass.app","/usr/bin/mongodb-compass","/snap/bin/mongodb-compass","/var/lib/flatpak/exports/bin/com.mongodb.Compass","/mnt/c/Program Files/MongoDB Compass/MongoDBCompass.exe","C:\Program Files\MongoDB Compass\MongoDBCompass.exe","%LOCALAPPDATA%\MongoDBCompass\MongoDBCompass.exe"
 
 set -eu -o pipefail
 
