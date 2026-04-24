@@ -1,0 +1,5 @@
+* text=auto eol=lf
+commands/host/compass text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.bats text eol=lf

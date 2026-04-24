@@ -1,24 +1,193 @@
 #!/usr/bin/env bash
+#ddev-generated
 
-## #ddev-generated: If you want to edit and own this file, remove this line.
-## Description: Launch MongoDB Compass
+## Description: Open MongoDB Compass connected to this project's MongoDB service
 ## Usage: compass
 ## Example: "ddev compass"
+## HostBinaryExists: "/Applications/MongoDB Compass.app","/usr/bin/mongodb-compass","/snap/bin/mongodb-compass","/var/lib/flatpak/exports/bin/com.mongodb.Compass","/mnt/c/Program Files/MongoDB Compass/MongoDBCompass.exe","C:\Program Files\MongoDB Compass\MongoDBCompass.exe","%LOCALAPPDATA%\MongoDBCompass\MongoDBCompass.exe"
 
-if [ "${DDEV_PROJECT_STATUS}" != "running" ] && [ -z "$no_recursion" ]; then
-  echo "Project ${DDEV_PROJECT} is not running, starting it"
-  ddev start || exit $?
-  no_recursion=true ddev "$(basename "$0")" "$@"
-  exit $?
+set -eu -o pipefail
+
+# -----------------------------------------------------------------------------
+# 1. Sanity checks
+# -----------------------------------------------------------------------------
+if [ "${DDEV_PROJECT_STATUS:-}" != "running" ]; then
+  echo "Project is not running. Run 'ddev start' first." >&2
+  exit 1
 fi
 
-binary="$(wslpath "$(powershell.exe -Command "echo \$env:LOCALAPPDATA" | tr -d '\r')")/MongoDBCompass/MongoDBCompass.exe"
+# -----------------------------------------------------------------------------
+# 2. Read credentials from .ddev/.env.mongo (with sensible defaults)
+#    An explicitly empty value disables authentication in the URI.
+# -----------------------------------------------------------------------------
+env_file="${DDEV_APPROOT}/.ddev/.env.mongo"
 
-mongoport=$(ddev describe -j | jq -r '.raw.services.mongo.host_ports_mapping[0].host_port')
+read_env() {
+  local key="$1" default="$2"
+  if [ -f "${env_file}" ] && grep -qE "^${key}=" "${env_file}"; then
+    local v
+    v=$(grep -E "^${key}=" "${env_file}" | tail -n1 | cut -d= -f2-)
+    # strip surrounding quotes, if any
+    v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"
+    printf '%s' "$v"
+    return
+  fi
+  printf '%s' "$default"
+}
 
-if [ -z "$mongoport" ]; then
-    echo "Fehler: Der Host-Port für den Service 'mongo' konnte nicht ermittelt werden."
-    exit 1
+mongo_user=$(read_env MONGO_INITDB_ROOT_USERNAME db)
+mongo_pass=$(read_env MONGO_INITDB_ROOT_PASSWORD db)
+mongo_db=$(read_env MONGO_INITDB_DATABASE db)
+
+# Minimal URL-encoding for characters that commonly break URIs
+urlencode() {
+  local s="$1" out="" c
+  for (( i=0; i<${#s}; i++ )); do
+    c="${s:i:1}"
+    case "$c" in
+      [A-Za-z0-9._~-]) out+="$c" ;;
+      *) out+=$(printf '%%%02X' "'$c") ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
+mongo_user_enc=$(urlencode "${mongo_user}")
+mongo_pass_enc=$(urlencode "${mongo_pass}")
+
+# -----------------------------------------------------------------------------
+# 3. Discover the dynamic host port for mongo:27017
+# -----------------------------------------------------------------------------
+container="ddev-${DDEV_PROJECT}-mongo"
+port_out=$(docker port "${container}" 27017/tcp 2>/dev/null | head -n1 || true)
+if [ -z "${port_out}" ]; then
+  cat >&2 <<EOF
+Could not determine the host port for ${container}:27017.
+
+Make sure:
+  - the ddev/ddev-mongo add-on is installed
+  - this project has been restarted since installing ddev-compass
+  - 'ddev restart' ran without errors
+EOF
+  exit 1
+fi
+host_port="${port_out##*:}"
+
+# -----------------------------------------------------------------------------
+# 4. Build the connection URI
+# -----------------------------------------------------------------------------
+if [ -n "${mongo_user}" ] && [ -n "${mongo_pass}" ]; then
+  uri="mongodb://${mongo_user_enc}:${mongo_pass_enc}@127.0.0.1:${host_port}/${mongo_db}?authSource=admin"
+  display_uri="mongodb://${mongo_user}:***@127.0.0.1:${host_port}/${mongo_db}?authSource=admin"
+else
+  uri="mongodb://127.0.0.1:${host_port}/${mongo_db}"
+  display_uri="${uri}"
 fi
 
-"${binary}" ""mongodb://localhost:${mongoport}?authSource=admin&readPreference=primary&ssl=false"" &>/dev/null & disown
+# -----------------------------------------------------------------------------
+# 5. Launch MongoDB Compass on whatever host we happen to be running on
+# -----------------------------------------------------------------------------
+is_wsl2() {
+  [ -f /proc/sys/fs/binfmt_misc/WSLInterop ] \
+    || grep -qi microsoft /proc/version 2>/dev/null \
+    || grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null
+}
+
+launch_compass() {
+  local uri="$1"
+  local os
+  os=$(uname -s 2>/dev/null || echo unknown)
+
+  # ---- macOS -------------------------------------------------------------
+  if [ "$os" = "Darwin" ] && [ -d "/Applications/MongoDB Compass.app" ]; then
+    open -a "MongoDB Compass" --args "${uri}"
+    return 0
+  fi
+
+  # ---- Native Windows (Git Bash / MSYS / Cygwin) -------------------------
+  case "${OSTYPE:-}" in
+    msys*|cygwin*|win32)
+      local localappdata
+      localappdata="${LOCALAPPDATA:-}"
+      if [ -n "$localappdata" ] && command -v cygpath >/dev/null 2>&1; then
+        localappdata=$(cygpath -u "$localappdata")
+      fi
+      local win_candidates=(
+        "${localappdata}/MongoDBCompass/MongoDBCompass.exe"
+        "/c/Program Files/MongoDB Compass/MongoDBCompass.exe"
+      )
+      for p in "${win_candidates[@]}"; do
+        if [ -f "$p" ]; then
+          ( "$p" "${uri}" >/dev/null 2>&1 & )
+          return 0
+        fi
+      done
+      ;;
+  esac
+
+  # ---- WSL2 — prefer the Windows-installed Compass -----------------------
+  if [ "$os" = "Linux" ] && is_wsl2; then
+    local winuser=""
+    if command -v cmd.exe >/dev/null 2>&1; then
+      winuser=$(cmd.exe /c 'echo %USERNAME%' 2>/dev/null | tr -d '\r\n ' || true)
+    fi
+    local wsl_candidates=(
+      "/mnt/c/Users/${winuser}/AppData/Local/MongoDBCompass/MongoDBCompass.exe"
+      "/mnt/c/Program Files/MongoDB Compass/MongoDBCompass.exe"
+    )
+    for p in "${wsl_candidates[@]}"; do
+      if [ -f "$p" ]; then
+        ( "$p" "${uri}" >/dev/null 2>&1 & )
+        return 0
+      fi
+    done
+    # fall through to native-Linux lookup if no Windows Compass was found
+  fi
+
+  # ---- Native Linux (and WSL2 fallback) ----------------------------------
+  if [ "$os" = "Linux" ]; then
+    for bin in mongodb-compass /snap/bin/mongodb-compass /usr/bin/mongodb-compass; do
+      if command -v "$bin" >/dev/null 2>&1 || [ -x "$bin" ]; then
+        ( "$bin" "${uri}" >/dev/null 2>&1 & )
+        return 0
+      fi
+    done
+    if command -v flatpak >/dev/null 2>&1 \
+       && flatpak info com.mongodb.Compass >/dev/null 2>&1; then
+      ( flatpak run com.mongodb.Compass "${uri}" >/dev/null 2>&1 & )
+      return 0
+    fi
+    for img in "${HOME}"/MongoDB*Compass*.AppImage \
+               "${HOME}"/Applications/MongoDB*Compass*.AppImage \
+               "${HOME}"/Downloads/MongoDB*Compass*.AppImage; do
+      if [ -x "$img" ]; then
+        ( "$img" "${uri}" >/dev/null 2>&1 & )
+        return 0
+      fi
+    done
+  fi
+
+  return 1
+}
+
+if ! launch_compass "${uri}"; then
+  cat >&2 <<EOF
+Could not find MongoDB Compass on your host.
+
+Install it from https://www.mongodb.com/products/tools/compass
+or make it reachable in one of these locations:
+
+  macOS    /Applications/MongoDB Compass.app
+  Linux    mongodb-compass on \$PATH, /snap/bin, flatpak (com.mongodb.Compass),
+           or a MongoDB*Compass*.AppImage in ~, ~/Applications or ~/Downloads
+  Windows  %LOCALAPPDATA%\\MongoDBCompass\\MongoDBCompass.exe
+           or C:\\Program Files\\MongoDB Compass\\MongoDBCompass.exe
+  WSL2     uses the Windows locations above via /mnt/c
+
+Connection URI that would have been used:
+  ${display_uri}
+EOF
+  exit 1
+fi
+
+echo "Launching MongoDB Compass → ${display_uri}"

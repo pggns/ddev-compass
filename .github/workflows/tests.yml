@@ -1,0 +1,62 @@
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '01 06 * * *'
+  workflow_dispatch:
+    inputs:
+      ddev_version:
+        description: 'DDEV version to test (e.g. v1.24.4, leave blank for latest stable)'
+        required: false
+        default: ''
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        ddev_version: ["stable", "HEAD"]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install DDEV
+        env:
+          DDEV_VERSION: ${{ matrix.ddev_version }}
+          INPUT_VERSION: ${{ github.event.inputs.ddev_version }}
+        run: |
+          # https://ddev.com/s/linux-install.sh
+          curl -fsSL https://apt.fury.io/drud/gpg.key | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/ddev.gpg
+          echo "deb [signed-by=/etc/apt/trusted.gpg.d/ddev.gpg] https://apt.fury.io/drud/ * *" | sudo tee /etc/apt/sources.list.d/ddev.list
+          sudo apt-get -q update
+          if [ "${DDEV_VERSION}" = "HEAD" ]; then
+            sudo apt-get -qq install -y --allow-downgrades ddev
+            # Install HEAD build
+            curl -fsSL https://raw.githubusercontent.com/ddev/ddev/main/scripts/install_ddev_head.sh | bash
+          elif [ -n "${INPUT_VERSION}" ]; then
+            sudo apt-get -qq install -y --allow-downgrades ddev=${INPUT_VERSION#v}
+          else
+            sudo apt-get -qq install -y --allow-downgrades ddev
+          fi
+          mkcert -install
+          ddev version
+
+      - name: Install Bats
+        uses: bats-core/bats-action@3.0.0
+        with:
+          bats-version: 1.11.0
+          support-install: true
+          assert-install: true
+          detik-install: false
+          file-install: false
+
+      - name: Run tests
+        env:
+          BATS_LIB_PATH: /usr/lib/bats
+        run: bats tests
