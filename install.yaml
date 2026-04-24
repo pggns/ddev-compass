@@ -18,19 +18,17 @@ dependencies:
 # Post-install actions are run after all files are copied.
 post_install_actions:
   - |
-    #ddev-nodisplay
-    true
-  - |
-    MongoDB Compass support has been added to this project.
-
-    Next steps:
-      1. ddev restart
-      2. ddev compass
-
-    Install MongoDB Compass on your host from:
-      https://www.mongodb.com/products/tools/compass
-
-    Credentials are read from .ddev/.env.mongo, falling back to db:db/db.
+    echo ""
+    echo "MongoDB Compass support has been added to this project."
+    echo ""
+    echo "Next steps:"
+    echo "  1. ddev restart"
+    echo "  2. ddev compass"
+    echo ""
+    echo "Install MongoDB Compass on your host from:"
+    echo "  https://www.mongodb.com/products/tools/compass"
+    echo ""
+    echo "Credentials are read from .ddev/.env.mongo, falling back to db:db/db."
 
 # Removal actions are run during `ddev add-on remove compass`.
 # The #ddev-generated stanza in every file handles automatic file cleanup.
