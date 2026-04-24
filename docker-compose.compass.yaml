@@ -1,4 +1,6 @@
 #ddev-generated
+# Exposes the mongo service's port 27017 on a random free port on the host
+# so GUI tools like MongoDB Compass can connect from outside the Docker network.
 services:
   mongo:
     ports:

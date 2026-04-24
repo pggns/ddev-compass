@@ -1,10 +1,40 @@
 name: compass
 
+# Pre-install actions are run before any files are copied.
+pre_install_actions:
+
+# List of files and directories that are copied into the project's .ddev directory.
 project_files:
   - commands/host/compass
   - docker-compose.compass.yaml
 
+# List of files and directories that are copied into the global .ddev directory.
+global_files:
+
+# Dependencies on other add-ons. These are installed automatically if missing.
 dependencies:
   - ddev/ddev-mongo
 
-ddev_version_constraint: '>= v1.24.10'
+# Post-install actions are run after all files are copied.
+post_install_actions:
+  - |
+    #ddev-nodisplay
+    true
+  - |
+    MongoDB Compass support has been added to this project.
+
+    Next steps:
+      1. ddev restart
+      2. ddev compass
+
+    Install MongoDB Compass on your host from:
+      https://www.mongodb.com/products/tools/compass
+
+    Credentials are read from .ddev/.env.mongo, falling back to db:db/db.
+
+# Removal actions are run during `ddev add-on remove compass`.
+# The #ddev-generated stanza in every file handles automatic file cleanup.
+removal_actions:
+
+# YAML files whose values are made available inside install actions as {{ .yaml_key }}.
+yaml_read_files:
